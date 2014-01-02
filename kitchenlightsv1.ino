@@ -1,8 +1,16 @@
 #include <Adafruit_NeoPixel.h>
 
-#define PIN 6
-//#define micPIN A0
-#define bPIN 5
+#define PIXEL_COUNT 6
+
+#define PIN_PIXEL_DO 6
+#define PIN_PUSH_BUTTON 5
+
+#define PIXEL_MODE_COUNT 3
+
+#define WHITE_LEVEL_MAX 255
+
+#define UPDATE_DELAY 20
+
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = pin number (most are valid)
@@ -11,193 +19,157 @@
 //   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
 //   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
 //   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(6, PIN, NEO_GRB + NEO_KHZ800);
-//String stringBuffer;
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB + NEO_KHZ800);
 
-//bool toggle = false;
-bool enableDemoMode = true;
+typedef void (* PixelModeServiceFuncPtr) ();
+PixelModeServiceFuncPtr pixelModeServiceFunctions[PIXEL_MODE_COUNT] = { fadeUpToWhiteService, holdWhiteService, rainbowService }; //, discoFlashService, rainbowCycleService, rainbowChaseService };
+PixelModeServiceFuncPtr pixelModeService;
 
-//int micVal=0;
-//int micBuffer[8];
-//int micBufferPos=0;
+int currentPixelMode = 0;
+
+// always a 16 bit number
+// need to make sure this is acconted for in routines using it that may expect an 8 bit uint
+uint16_t pixelModeCycleIndex = 0;
 
 void setup() {
   strip.begin();
   strip.show(); // Initialize all pixels to 'off'
 
-//  Serial.begin(9600);
-  //  pinMode(micPIN,INPUT);
-  pinMode(bPIN, INPUT);
+  pinMode(PIN_PUSH_BUTTON, INPUT);
 
-
-  // look for button held on boot
-  if (digitalRead(bPIN))
-  {
-    // debounce
-    delay(20);
-    if (digitalRead(bPIN))
-    {
-      // solid press!
-      enableDemoMode = false;
-    }
-  }
+  setModeServiceRoutine();
 
 }
 
 void loop() {
 
-  if (enableDemoMode)
+  // check for stimulous
+  if (stimulousInput())
   {
-    demoMode();
-  } else {
-    clearAllPixels();
-    delay(1000);
-    whiteFadeUp();
-    delay(5000);
-    clearAllPixels();
+    // change pixel mode if necessary
+    modeCycle();
   }
 
+  // service current pixel mode
+  modeService();
+
+  // wait an appropriate amount of time
+  delay(UPDATE_DELAY);
+
 }
 
-//void pushButtonMode()
-//{
-//
-//  //button push
-//  if (digitalRead(bPIN))
-//  {
-//    // debounce
-//    delay(20);
-//    if (digitalRead(bPIN))
-//    {
-//      // solid press!
-//      toggle = !toggle;
-//      Serial.println("button!");
-//      Serial.println("toggle!");
-//      while (digitalRead(bPIN)) { };
-//    }
-//  }
-//}
-
-void demoMode()
+void modeService()
 {
-  //Some example procedures showing how to display to the pixels:
-  colorWipe(strip.Color(255, 0, 0), 50); // Red
-  colorWipe(strip.Color(0, 255, 0), 50); // Green
-  colorWipe(strip.Color(0, 0, 255), 50); // Blue
-  colorWipe(strip.Color(255, 0, 0), 50); // Red
-  colorWipe(strip.Color(0, 255, 0), 50); // Green
-  colorWipe(strip.Color(0, 0, 255), 50); // Blue
-  rainbow(10);
-  rainbowCycle(10);
-  whiteFadeUp();
-  whiteFadeDown();
+  // handle general purpose counter and run current pixel mode service routine
+  // should probably take care of some timing here too at some point (to handle debouncing race condition)
+
+  pixelModeCycleIndex++;
 }
 
-//void micRoutines() {
-//
-//micVal = analogRead(micPIN);
-//micBuffer[micBufferPos] = micVal;
-//micBufferPos++;
-//if(micBufferPos>=8) micBufferPos=0;
-//
-//int micAvg = 0;
-//int micMax = 512;
-//int micMin = 512;
-//for(int i = 0; i < 8; i++)
-//{
-//  micAvg = (micAvg + micBuffer[i])/2;
-//  if (micBuffer[i] > micMax) micMax = micBuffer[i];
-//  if (micBuffer[i] < micMin) micMin = micBuffer[i];
-//}
-//
-//stringBuffer = String("Min: ");
-//stringBuffer += micMin;
-//stringBuffer += " Max:";
-//stringBuffer += micMax;
-//stringBuffer += " Avg:";
-//stringBuffer += micAvg;
-//
-//Serial.println(stringBuffer);
-//delay(10);
-//
-//}
+bool stimulousInput()
+{
+  unsigned long time;
+  if (digitalRead(PIN_PUSH_BUTTON))
+  {
+    // debounce
+    modeService();
 
-void whiteFadeUp()
+    if (digitalRead(PIN_PUSH_BUTTON))
+    {
+      // solid press
+      return true;
+    }
+  }
+}
+
+// could probably macro this
+void setModeServiceRoutine()
+{
+  pixelModeService = pixelModeServiceFunctions[currentPixelMode];
+}
+
+void modeCycle()
+{
+  currentPixelMode++;
+  if (currentPixelMode > PIXEL_MODE_COUNT)
+  {
+    currentPixelMode = 0;
+  }
+  setModeServiceRoutine();
+}
+
+void holdWhiteService()
+{
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX);
+  }
+  strip.show();
+}
+
+void fadeUpToWhiteService()
+{
+  int b = pixelModeCycleIndex >> 8;
+
+  int c = (WHITE_LEVEL_MAX / b) * WHITE_LEVEL_MAX;
+
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, c, c, c);
+  }
+  strip.show();
+}
+
+void fadeDownFromWhiteService()
+{
+  int b = pixelModeCycleIndex >> 8;
+
+  int c = (WHITE_LEVEL_MAX / b) * WHITE_LEVEL_MAX;
+
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, WHITE_LEVEL_MAX - c, WHITE_LEVEL_MAX - c, WHITE_LEVEL_MAX - c);
+  }
+  strip.show();
+}
+
+void setAllPixelsOff()
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
     strip.setPixelColor(i, 0, 0, 0);
   }
   strip.show();
-
-  for (int b = 0; b <= 255; b++)
-  {
-    for (uint16_t i = 0; i < strip.numPixels(); i++)
-    {
-      strip.setPixelColor(i, b, b, b);
-    }
-    strip.show();
-    delay(10);
-  }
-}
-
-void whiteFadeDown()
-{
-  for (uint16_t i = 0; i < strip.numPixels(); i++)
-  {
-    strip.setPixelColor(i, 0, 0, 0);
-  }
-  strip.show();
-
-  for (int b = 255; b >= 0; b--)
-  {
-    for (uint16_t i = 0; i < strip.numPixels(); i++)
-    {
-      strip.setPixelColor(i, b, b, b);
-    }
-    strip.show();
-    delay(10);
-  }
-}
-
-void clearAllPixels()
-{
-  colorWipe(strip.Color(0, 0, 0), 1);
 }
 
 // Fill the dots one after the other with a color
-void colorWipe(uint32_t c, uint8_t wait) {
+//void modeColorWipe(uint32_t c, uint8_t wait) {
+//  for (uint16_t i = 0; i < strip.numPixels(); i++) {
+//    strip.setPixelColor(i, c);
+//    strip.show();
+//    delay(wait);
+//  }
+//}
+
+void rainbowService() {
   for (uint16_t i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, c);
-    strip.show();
-    delay(wait);
+    strip.setPixelColor(i, Wheel((i + pixelModeCycleIndex) & 255));
   }
-}
-
-void rainbow(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
+  strip.show();
 }
 
 // Slightly different, this makes the rainbow equally distributed throughout
-void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-    }
-    strip.show();
-    delay(wait);
-  }
-}
+//void modeRainbowCycle(uint8_t wait) {
+//  uint16_t i, j;
+//
+//  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
+//    for (i = 0; i < strip.numPixels(); i++) {
+//      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+//    }
+//    strip.show();
+//    delay(wait);
+//  }
+//}
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
