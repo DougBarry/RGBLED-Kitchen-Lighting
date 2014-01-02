@@ -1,9 +1,15 @@
+// Doug Barry 2014010222:49:00
+
 #include <Adafruit_NeoPixel.h>
 
+// Number of pixels in your string
 #define PIXEL_COUNT 6
 
+// PIN connected to the DI/DO of the pixel string
 #define PIN_PIXEL_DO 6
+// PIN connected to the push button for mode selection
 #define PIN_PUSH_BUTTON 5
+
 
 #define PIXEL_MODE_COUNT 4
 
@@ -151,19 +157,6 @@ void fadeUpToWhiteService()
 
 }
 
-void fadeDownFromWhiteService()
-{
-  int b = pixelModeCycleIndex / 256;
-
-  int c = (WHITE_LEVEL_MAX / b) * WHITE_LEVEL_MAX;
-
-  for (uint16_t i = 0; i < strip.numPixels(); i++)
-  {
-    strip.setPixelColor(i, WHITE_LEVEL_MAX - c, WHITE_LEVEL_MAX - c, WHITE_LEVEL_MAX - c);
-  }
-  strip.show();
-}
-
 void setAllPixelsOff()
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
@@ -172,15 +165,6 @@ void setAllPixelsOff()
   }
   strip.show();
 }
-
-// Fill the dots one after the other with a color
-//void modeColorWipe(uint32_t c, uint8_t wait) {
-//  for (uint16_t i = 0; i < strip.numPixels(); i++) {
-//    strip.setPixelColor(i, c);
-//    strip.show();
-//    delay(wait);
-//  }
-//}
 
 void rainbowService() {
   for (uint16_t i = 0; i < strip.numPixels(); i++) {
