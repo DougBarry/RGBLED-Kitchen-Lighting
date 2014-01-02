@@ -5,11 +5,11 @@
 #define PIN_PIXEL_DO 6
 #define PIN_PUSH_BUTTON 5
 
-#define PIXEL_MODE_COUNT 3
+#define PIXEL_MODE_COUNT 4
 
 #define WHITE_LEVEL_MAX 255
 
-#define UPDATE_DELAY 20
+#define UPDATE_DELAY 10
 
 
 // Parameter 1 = number of pixels in strip
@@ -22,10 +22,11 @@
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB + NEO_KHZ800);
 
 typedef void (* PixelModeServiceFuncPtr) ();
-PixelModeServiceFuncPtr pixelModeServiceFunctions[PIXEL_MODE_COUNT] = { fadeUpToWhiteService, holdWhiteService, rainbowService }; //, discoFlashService, rainbowCycleService, rainbowChaseService };
+// holdwhiteservice must be position 1;
+PixelModeServiceFuncPtr pixelModeServiceFunctions[PIXEL_MODE_COUNT] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService };
 PixelModeServiceFuncPtr pixelModeService;
 
-int currentPixelMode = 0;
+uint16_t currentPixelMode = 0;
 
 // always a 16 bit number
 // need to make sure this is acconted for in routines using it that may expect an 8 bit uint
@@ -39,6 +40,7 @@ void setup() {
 
   setModeServiceRoutine();
 
+  Serial.begin(9600);
 }
 
 void loop() {
@@ -46,15 +48,19 @@ void loop() {
   // check for stimulous
   if (stimulousInput())
   {
+    Serial.println("button press");
+    Serial.print("Current mode: ");
+    Serial.println(currentPixelMode);
     // change pixel mode if necessary
     modeCycle();
+    Serial.print("New mode: ");
+    Serial.println(currentPixelMode);
+
+    delay(UPDATE_DELAY);
   }
 
   // service current pixel mode
   modeService();
-
-  // wait an appropriate amount of time
-  delay(UPDATE_DELAY);
 
 }
 
@@ -63,7 +69,17 @@ void modeService()
   // handle general purpose counter and run current pixel mode service routine
   // should probably take care of some timing here too at some point (to handle debouncing race condition)
 
-  pixelModeCycleIndex++;
+  pixelModeCycleIndex+=2;
+
+  //  if((pixelModeCycleIndex % 64) == 0)
+  //  {
+  //    Serial.println(pixelModeCycleIndex);
+  //  }
+
+  pixelModeService();
+
+  // wait an appropriate amount of time
+  delay(UPDATE_DELAY);
 }
 
 bool stimulousInput()
@@ -76,7 +92,11 @@ bool stimulousInput()
 
     if (digitalRead(PIN_PUSH_BUTTON))
     {
-      // solid press
+      // solid press, need tp wait for button release
+      while (digitalRead(PIN_PUSH_BUTTON))
+      {
+        modeService();
+      }
       return true;
     }
   }
@@ -109,20 +129,31 @@ void holdWhiteService()
 
 void fadeUpToWhiteService()
 {
-  int b = pixelModeCycleIndex >> 8;
+  uint16_t c = pixelModeCycleIndex;
 
-  int c = (WHITE_LEVEL_MAX / b) * WHITE_LEVEL_MAX;
+  if (c > WHITE_LEVEL_MAX)
+  {
+    c = WHITE_LEVEL_MAX;
+  }
 
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
     strip.setPixelColor(i, c, c, c);
   }
   strip.show();
+
+  if (c >= WHITE_LEVEL_MAX)
+  {
+    // special case, move to holdWhiteService
+    currentPixelMode = 1;
+    setModeServiceRoutine();
+  }
+
 }
 
 void fadeDownFromWhiteService()
 {
-  int b = pixelModeCycleIndex >> 8;
+  int b = pixelModeCycleIndex / 256;
 
   int c = (WHITE_LEVEL_MAX / b) * WHITE_LEVEL_MAX;
 
@@ -159,17 +190,16 @@ void rainbowService() {
 }
 
 // Slightly different, this makes the rainbow equally distributed throughout
-//void modeRainbowCycle(uint8_t wait) {
-//  uint16_t i, j;
-//
+void rainbowCycleService() {
+  uint16_t i, j;
+
 //  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
-//    for (i = 0; i < strip.numPixels(); i++) {
-//      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
-//    }
-//    strip.show();
-//    delay(wait);
-//  }
-//}
+    for (i = 0; i < strip.numPixels(); i++) {
+      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + pixelModeCycleIndex) & 255));
+    }
+    strip.show();
+  //}
+}
 
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
