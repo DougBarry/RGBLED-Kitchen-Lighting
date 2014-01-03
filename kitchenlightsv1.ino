@@ -2,6 +2,19 @@
 
 #include <Adafruit_NeoPixel.h>
 
+#define DEBUG false
+
+// from http://forum.arduino.cc/index.php?topic=46900.0
+#ifdef DEBUG
+#define DEBUG_PRINT(x)     Serial.print (x)
+#define DEBUG_PRINTDEC(x)     Serial.print (x, DEC)
+#define DEBUG_PRINTLN(x)  Serial.println (x)
+#else
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTDEC(x)
+#define DEBUG_PRINTLN(x)
+#endif
+
 #define NOOP() __asm__("nop\n\t");
 
 // Number of pixels in your string
@@ -59,7 +72,10 @@ void setup() {
 
   setModeServiceRoutine();
 
+#ifdef DEBUG
   Serial.begin(9600);
+#endif
+
 }
 
 void loop() {
@@ -67,22 +83,25 @@ void loop() {
   // check for stimulous
   if (stimulousInput())
   {
-    Serial.println("button press");
-    Serial.print("Current mode: ");
-    Serial.println(currentPixelMode);
+    DEBUG_PRINTLN("button press");
+    DEBUG_PRINT("Current mode: ");
+    DEBUG_PRINTLN(currentPixelMode);
     // change pixel mode if necessary
     modeCycle();
-    Serial.print("New mode: ");
-    Serial.println(currentPixelMode);
+    DEBUG_PRINT("New mode: ");
+    DEBUG_PRINTLN(currentPixelMode);
   }
 
   // delay till next loop cycle, do stuff in the mean time
   unsigned long time;
   time = millis();
-  
-  while((time-millis()) < UPDATE_DELAY)
+
+  while ((time - millis()) < UPDATE_DELAY)
   {
+    // do nothing
     NOOP();
+
+    // perhaps sample microphone?
   }
 
   // service current pixel mode
@@ -95,7 +114,7 @@ void modeService()
   // handle general purpose counter and run current pixel mode service routine
   // should probably take care of some timing here too at some point (to handle debouncing race condition)
 
-  pixelModeCycleIndex+=2;
+  pixelModeCycleIndex += 2;
 
   //  if((pixelModeCycleIndex % 64) == 0)
   //  {
@@ -105,7 +124,7 @@ void modeService()
   pixelModeService();
 
   // wait an appropriate amount of time
-//  delay(UPDATE_DELAY);
+  //  delay(UPDATE_DELAY);
 }
 
 bool stimulousInput()
@@ -196,11 +215,11 @@ void rainbowService() {
 void rainbowCycleService() {
   uint16_t i, j;
 
-//  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + pixelModeCycleIndex) & 255));
-    }
-    strip.show();
+  //  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
+  for (i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + pixelModeCycleIndex) & 255));
+  }
+  strip.show();
   //}
 }
 
