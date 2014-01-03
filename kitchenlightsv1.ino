@@ -92,27 +92,6 @@ void loop() {
     DEBUG_PRINTLN(currentPixelMode);
   }
 
-  // delay till next loop cycle, do stuff in the mean time
-  unsigned long time;
-  time = millis();
-
-  DEBUG_PRINT("Time going in: ");
-  DEBUG_PRINTLN(time);
-
-  // seems to take about 2ms to do this comparisson
-  while ((time - millis()) < (UPDATE_DELAY - 2))
-  {
-    // do nothing
-    //    NOOP();
-
-    // perhaps sample microphone?
-  }
-
-  time = millis();
-
-  DEBUG_PRINT("Time coming out: ");
-  DEBUG_PRINTLN(time);
-
   // service current pixel mode
   modeService();
 
@@ -133,7 +112,7 @@ void modeService()
   pixelModeService();
 
   // wait an appropriate amount of time
-  //  delay(UPDATE_DELAY);
+  delay(UPDATE_DELAY);
 }
 
 bool stimulousInput()
@@ -164,7 +143,7 @@ void setModeServiceRoutine()
 void modeCycle()
 {
   currentPixelMode++;
-  if (currentPixelMode > PIXEL_MODE_COUNT)
+  if (currentPixelMode >= PIXEL_MODE_COUNT)
   {
     currentPixelMode = 0;
   }
