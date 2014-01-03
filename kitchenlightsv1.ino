@@ -2,7 +2,7 @@
 
 #include <Adafruit_NeoPixel.h>
 
-#define DEBUG false
+//#define DEBUG
 
 // from http://forum.arduino.cc/index.php?topic=46900.0
 #ifdef DEBUG
@@ -96,13 +96,22 @@ void loop() {
   unsigned long time;
   time = millis();
 
-  while ((time - millis()) < UPDATE_DELAY)
+  DEBUG_PRINT("Time going in: ");
+  DEBUG_PRINTLN(time);
+
+  // seems to take about 2ms to do this comparisson
+  while ((time - millis()) < (UPDATE_DELAY - 2))
   {
     // do nothing
-    NOOP();
+    //    NOOP();
 
     // perhaps sample microphone?
   }
+
+  time = millis();
+
+  DEBUG_PRINT("Time coming out: ");
+  DEBUG_PRINTLN(time);
 
   // service current pixel mode
   modeService();
