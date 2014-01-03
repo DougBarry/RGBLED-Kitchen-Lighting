@@ -1,6 +1,8 @@
-// Doug Barry 2014010222:49:00
+// Doug Barry 20140103203200
 
 #include <Adafruit_NeoPixel.h>
+
+#define NOOP() __asm__("nop\n\t");
 
 // Number of pixels in your string
 #define PIXEL_COUNT 6
@@ -32,6 +34,17 @@ typedef void (* PixelModeServiceFuncPtr) ();
 PixelModeServiceFuncPtr pixelModeServiceFunctions[PIXEL_MODE_COUNT] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService };
 PixelModeServiceFuncPtr pixelModeService;
 
+/*mode ideas, reversible in direction, and invertable in colours
+hourglass drop out
+hourglass full up
+colour flow from ends
+colour flow from center
+colours sway
+ping pong (single coloured led moving, or non-illuminated led moving)
+flash colour
+pulse colour (fade up, fade down)
+*/
+
 uint16_t currentPixelMode = 0;
 
 // always a 16 bit number
@@ -61,8 +74,15 @@ void loop() {
     modeCycle();
     Serial.print("New mode: ");
     Serial.println(currentPixelMode);
+  }
 
-    delay(UPDATE_DELAY);
+  // delay till next loop cycle, do stuff in the mean time
+  unsigned long time;
+  time = millis();
+  
+  while((time-millis()) < UPDATE_DELAY)
+  {
+    NOOP();
   }
 
   // service current pixel mode
@@ -85,12 +105,11 @@ void modeService()
   pixelModeService();
 
   // wait an appropriate amount of time
-  delay(UPDATE_DELAY);
+//  delay(UPDATE_DELAY);
 }
 
 bool stimulousInput()
 {
-  unsigned long time;
   if (digitalRead(PIN_PUSH_BUTTON))
   {
     // debounce
