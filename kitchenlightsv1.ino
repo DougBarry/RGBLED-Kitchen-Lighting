@@ -1,4 +1,4 @@
-// Doug Barry 20140103203200
+// Doug Barry 20140104111600
 
 #include <Adafruit_NeoPixel.h>
 
@@ -15,7 +15,9 @@
 #define DEBUG_PRINTLN(x)
 #endif
 
-#define NOOP() __asm__("nop\n\t");
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+
+#define NOOP() __asm__("nop\n\t")
 
 // Number of pixels in your string
 #define PIXEL_COUNT 6
@@ -25,13 +27,9 @@
 // PIN connected to the push button for mode selection
 #define PIN_PUSH_BUTTON 5
 
-
-#define PIXEL_MODE_COUNT 4
-
 #define WHITE_LEVEL_MAX 255
 
 #define UPDATE_DELAY 10
-
 
 // Parameter 1 = number of pixels in strip
 // Parameter 2 = pin number (most are valid)
@@ -44,8 +42,11 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB +
 
 typedef void (* PixelModeServiceFuncPtr) ();
 // holdwhiteservice must be position 1;
-PixelModeServiceFuncPtr pixelModeServiceFunctions[PIXEL_MODE_COUNT] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService };
+
+PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, hourGlassDropOutService, colourFlowFromEndService };
 PixelModeServiceFuncPtr pixelModeService;
+
+#define PIXEL_MODE_COUNT (ARRAY_SIZE(pixelModeServiceFunctions))
 
 /*mode ideas, reversible in direction, and invertable in colours
 hourglass drop out
@@ -63,6 +64,30 @@ uint16_t currentPixelMode = 0;
 // always a 16 bit number
 // need to make sure this is acconted for in routines using it that may expect an 8 bit uint
 uint16_t pixelModeCycleIndex = 0;
+
+uint32_t preDefinedPixelColours[] = {
+  strip.Color(255, 0, 0),
+  strip.Color(0, 255, 0),
+  strip.Color(0, 0, 255),
+  strip.Color(255, 255, 0),
+  strip.Color(255, 128, 0),
+  strip.Color(255, 0, 255),
+  strip.Color(0, 255, 255),
+  strip.Color(0, 128, 255)
+};
+
+#define PREDEFINED_PIXELCOLOURS_COUNT (ARRAY_SIZE(preDefinedPixelColours))
+
+
+//{
+//  RED,
+//  BLUE,
+//  GREEN,
+//  YELLOW,
+//  ORANGE,
+//  PURPLE,
+//  PINK
+//};
 
 void setup() {
   strip.begin();
@@ -137,6 +162,7 @@ bool stimulousInput()
 // could probably macro this
 void setModeServiceRoutine()
 {
+  pixelModeCycleIndex = 0;
   pixelModeService = pixelModeServiceFunctions[currentPixelMode];
 }
 
@@ -149,6 +175,37 @@ void modeCycle()
   }
   setModeServiceRoutine();
 }
+
+
+void colourFlowFromEndService()
+{
+  // may be less pixels than there are colours!
+  int pColourIndex = (pixelModeCycleIndex >> 4)   % PREDEFINED_PIXELCOLOURS_COUNT;
+
+  for (uint16_t i = 0; i < strip.numPixels(); i++)
+  {
+    strip.setPixelColor(i, preDefinedPixelColours[pColourIndex]);
+    pColourIndex++;
+    if (pColourIndex > PREDEFINED_PIXELCOLOURS_COUNT)
+    {
+      pColourIndex = 0;
+    }
+  }
+  strip.show();
+}
+
+
+void hourGlassDropOutService()
+{
+  setAllPixelsOff(false);
+  for (uint16_t i = 0; i < strip.numPixels() - (pixelModeCycleIndex >> 5); i++)
+  {
+    strip.setPixelColor(i, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX);
+  }
+  strip.show();
+}
+
+
 
 void holdWhiteService()
 {
@@ -183,13 +240,13 @@ void fadeUpToWhiteService()
 
 }
 
-void setAllPixelsOff()
+void setAllPixelsOff(bool flushToStrip)
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
     strip.setPixelColor(i, 0, 0, 0);
   }
-  strip.show();
+  if (flushToStrip) strip.show();
 }
 
 void rainbowService() {
