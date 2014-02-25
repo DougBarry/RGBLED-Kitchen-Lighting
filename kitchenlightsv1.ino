@@ -2,7 +2,7 @@
 
 #include <Adafruit_NeoPixel.h>
 
-//#define DEBUG
+#define DEBUG
 
 // from http://forum.arduino.cc/index.php?topic=46900.0
 #ifdef DEBUG
@@ -20,12 +20,20 @@
 #define NOOP() __asm__("nop\n\t")
 
 // Number of pixels in your string
-#define PIXEL_COUNT 6
+#define PIXEL_COUNT 60
 
 // PIN connected to the DI/DO of the pixel string
 #define PIN_PIXEL_DO 6
 // PIN connected to the push button for mode selection
 #define PIN_PUSH_BUTTON 5
+
+// PIN connected to Brightness pot
+#define PIN_BRIGHTNESS_POT 1
+// calibration for pot min/max
+#define BRIGHTNESS_POT_READING_MAX 1022
+#define BRIGHTNESS_POT_READING_MIN 1
+#define BRIGHTNESS_READINGS_BUFFER_SIZE 4
+// account for log/lin?
 
 #define WHITE_LEVEL_MAX 255
 
@@ -43,7 +51,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB +
 typedef void (* PixelModeServiceFuncPtr) ();
 // holdwhiteservice must be position 1;
 
-PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, hourGlassDropOutService, colourFlowFromEndService };
+PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, rainbowCycleService2 }; //, hourGlassDropOutService, colourFlowFromEndService };
 PixelModeServiceFuncPtr pixelModeService;
 
 #define PIXEL_MODE_COUNT (ARRAY_SIZE(pixelModeServiceFunctions))
@@ -78,7 +86,6 @@ uint32_t preDefinedPixelColours[] = {
 
 #define PREDEFINED_PIXELCOLOURS_COUNT (ARRAY_SIZE(preDefinedPixelColours))
 
-
 //{
 //  RED,
 //  BLUE,
@@ -88,6 +95,11 @@ uint32_t preDefinedPixelColours[] = {
 //  PURPLE,
 //  PINK
 //};
+
+uint8_t currentBrightnessLevel = WHITE_LEVEL_MAX;
+
+int brightnessReadings[BRIGHTNESS_READINGS_BUFFER_SIZE];
+uint8_t brightnessReadingsIndex = 0;
 
 void setup() {
   strip.begin();
@@ -120,6 +132,48 @@ void loop() {
   // service current pixel mode
   modeService();
 
+  updateBrightness();
+
+}
+
+int getBrightnessPot() {
+  int brtPot = analogRead(PIN_BRIGHTNESS_POT);
+//  DEBUG_PRINT("Brightness pot: ");
+//  DEBUG_PRINTLN(brtPot);
+  return brtPot;
+}
+
+void updateBrightness() {
+  int reading = getBrightnessPot();
+  float brt = (float)reading / (float)(BRIGHTNESS_POT_READING_MAX - BRIGHTNESS_POT_READING_MIN);
+
+//  DEBUG_PRINT("brt: ");
+//  DEBUG_PRINTLN(brt);
+
+  uint8_t brightness = floor((float)WHITE_LEVEL_MAX * brt);
+
+  brightnessReadings[brightnessReadingsIndex] = brightness;
+  brightnessReadingsIndex++;
+
+  if (brightnessReadingsIndex > ARRAY_SIZE(brightnessReadings)) brightnessReadingsIndex = 0;
+
+  int brightnessAvg = 0;
+  for (int i = 0; i < ARRAY_SIZE(brightnessReadings); i++)
+  {
+    brightnessAvg = (int)((float)(brightnessAvg + brightnessReadings[i]) / 2);
+  }
+
+  currentBrightnessLevel = brightnessAvg; //floor((float)WHITE_LEVEL_MAX * brt);
+
+//  DEBUG_PRINT("currentBrightnessLevel: ");
+//  DEBUG_PRINTLN(currentBrightnessLevel);
+
+}
+
+// takes old brightness, converts to dimmed brightness
+uint8_t colourBrightness(uint8_t inputBrightness)
+{
+  return floor(( (float)( (float) currentBrightnessLevel / (float)WHITE_LEVEL_MAX) * (float)inputBrightness));
 }
 
 void modeService()
@@ -184,7 +238,7 @@ void colourFlowFromEndService()
 
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
-    strip.setPixelColor(i, preDefinedPixelColours[pColourIndex]);
+    strip.setPixelColor(i, colourBrightness(preDefinedPixelColours[pColourIndex]));
     pColourIndex++;
     if (pColourIndex > PREDEFINED_PIXELCOLOURS_COUNT)
     {
@@ -200,7 +254,7 @@ void hourGlassDropOutService()
   setAllPixelsOff(false);
   for (uint16_t i = 0; i < strip.numPixels() - (pixelModeCycleIndex >> 5); i++)
   {
-    strip.setPixelColor(i, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX);
+    strip.setPixelColor(i, colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX));
   }
   strip.show();
 }
@@ -211,7 +265,7 @@ void holdWhiteService()
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
-    strip.setPixelColor(i, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX, WHITE_LEVEL_MAX);
+    strip.setPixelColor(i, colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX));
   }
   strip.show();
 }
@@ -220,18 +274,18 @@ void fadeUpToWhiteService()
 {
   uint16_t c = pixelModeCycleIndex;
 
-  if (c > WHITE_LEVEL_MAX)
+  if (c > 255)
   {
-    c = WHITE_LEVEL_MAX;
+    c = 255;
   }
 
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
-    strip.setPixelColor(i, c, c, c);
+    strip.setPixelColor(i, colourBrightness(c), colourBrightness(c), colourBrightness(c));
   }
   strip.show();
 
-  if (c >= WHITE_LEVEL_MAX)
+  if (c >= 255)
   {
     // special case, move to holdWhiteService
     currentPixelMode = 1;
@@ -268,6 +322,19 @@ void rainbowCycleService() {
   //}
 }
 
+// variant
+void rainbowCycleService2() {
+  uint16_t i, j;
+
+  //  for (j = 0; j < 256 * 5; j++) { // 5 cycles of all colors on wheel
+  for (i = 0; i < strip.numPixels(); i++) {
+    strip.setPixelColor(i, Wheel2(((i * 256 / strip.numPixels()) + pixelModeCycleIndex) & 255));
+  }
+  strip.show();
+  //}
+}
+
+
 // Input a value 0 to 255 to get a color value.
 // The colours are a transition r - g - b - back to r.
 uint32_t Wheel(byte WheelPos) {
@@ -282,4 +349,15 @@ uint32_t Wheel(byte WheelPos) {
   }
 }
 
-
+uint32_t Wheel2(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if (WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  } else if (WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  } else {
+    WheelPos -= 170;
+    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  }
+}
