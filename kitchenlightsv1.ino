@@ -20,7 +20,7 @@
 #define NOOP() __asm__("nop\n\t")
 
 // Number of pixels in your string
-#define PIXEL_COUNT 60
+#define PIXEL_COUNT 6
 
 // PIN connected to the DI/DO of the pixel string
 #define PIN_PIXEL_DO 6
@@ -51,7 +51,8 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB +
 typedef void (* PixelModeServiceFuncPtr) ();
 // holdwhiteservice must be position 1;
 
-PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, rainbowCycleService2 }; //, hourGlassDropOutService, colourFlowFromEndService };
+//PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, rainbowCycleService2 }; //, hourGlassDropOutService, colourFlowFromEndService };
+PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { knightRiderService };
 PixelModeServiceFuncPtr pixelModeService;
 
 #define PIXEL_MODE_COUNT (ARRAY_SIZE(pixelModeServiceFunctions))
@@ -71,7 +72,7 @@ uint16_t currentPixelMode = 0;
 
 // always a 16 bit number
 // need to make sure this is acconted for in routines using it that may expect an 8 bit uint
-uint16_t pixelModeCycleIndex = 0;
+uint8_t pixelModeCycleIndex = 0;
 
 uint32_t preDefinedPixelColours[] = {
   strip.Color(255, 0, 0),
@@ -181,7 +182,7 @@ void modeService()
   // handle general purpose counter and run current pixel mode service routine
   // should probably take care of some timing here too at some point (to handle debouncing race condition)
 
-  pixelModeCycleIndex += 2;
+  pixelModeCycleIndex++;
 
   //  if((pixelModeCycleIndex % 64) == 0)
   //  {
@@ -230,6 +231,49 @@ void modeCycle()
   setModeServiceRoutine();
 }
 
+void knightRiderService()
+{
+  setAllPixelsOff(false);
+
+  // max value of pixelModeCycleIndex is 256  
+    
+    uint16_t i = pixelModeCycleIndex;
+    
+    //DEBUG_PRINTLN(i);
+
+    int pixelCenterPos = (float)(sin(i/8)+1) * ((float)PIXEL_COUNT/2);
+//    DEBUG_PRINTLN(sin(i));
+    DEBUG_PRINTLN(pixelCenterPos);
+    
+    strip.setPixelColor(pixelCenterPos, colourBrightness(255),0,0);
+    strip.show();
+    
+    return;
+    
+    for(int fadeIndex = 0; fadeIndex <= PIXEL_COUNT/6; fadeIndex ++)
+    {
+      int pixelNum = 0;
+      
+      
+      pixelNum = fadeIndex + pixelCenterPos;
+      
+//      DEBUG_PRINTLN(pixelNum);
+      
+      continue;
+      
+      if((pixelNum >= 0) || (pixelNum < PIXEL_COUNT))
+      {
+        int pixelBrightness = 255 * cos((float) (PIXEL_COUNT/6) * 90) * (float)fadeIndex;
+        
+//        DEBUG_PRINTLN(pixelBrightness);
+        
+        strip.setPixelColor(pixelNum, colourBrightness(pixelBrightness),0,0);
+      }
+    }
+  
+  strip.show();
+  
+}
 
 void colourFlowFromEndService()
 {
