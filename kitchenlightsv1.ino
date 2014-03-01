@@ -20,7 +20,7 @@
 #define NOOP() __asm__("nop\n\t")
 
 // Number of pixels in your string
-#define PIXEL_COUNT 6
+#define PIXEL_COUNT 60
 
 // PIN connected to the DI/DO of the pixel string
 #define PIN_PIXEL_DO 6
@@ -35,7 +35,7 @@
 #define BRIGHTNESS_READINGS_BUFFER_SIZE 4
 // account for log/lin?
 
-#define WHITE_LEVEL_MAX 255
+#define MAX_LED_BRIGTHNESS 255
 
 #define UPDATE_DELAY 10
 
@@ -51,8 +51,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIN_PIXEL_DO, NEO_GRB +
 typedef void (* PixelModeServiceFuncPtr) ();
 // holdwhiteservice must be position 1;
 
-//PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, rainbowService, rainbowCycleService, rainbowCycleService2 }; //, hourGlassDropOutService, colourFlowFromEndService };
-PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { knightRiderService };
+PixelModeServiceFuncPtr pixelModeServiceFunctions[] = { fadeUpToWhiteService, holdWhiteService, knightRiderService, rainbowService, rainbowCycleService, rainbowCycleService2 }; //, hourGlassDropOutService, colourFlowFromEndService };
 PixelModeServiceFuncPtr pixelModeService;
 
 #define PIXEL_MODE_COUNT (ARRAY_SIZE(pixelModeServiceFunctions))
@@ -97,7 +96,7 @@ uint32_t preDefinedPixelColours[] = {
 //  PINK
 //};
 
-uint8_t currentBrightnessLevel = WHITE_LEVEL_MAX;
+uint8_t currentBrightnessLevel = MAX_LED_BRIGTHNESS;
 
 int brightnessReadings[BRIGHTNESS_READINGS_BUFFER_SIZE];
 uint8_t brightnessReadingsIndex = 0;
@@ -139,8 +138,8 @@ void loop() {
 
 int getBrightnessPot() {
   int brtPot = analogRead(PIN_BRIGHTNESS_POT);
-//  DEBUG_PRINT("Brightness pot: ");
-//  DEBUG_PRINTLN(brtPot);
+  //  DEBUG_PRINT("Brightness pot: ");
+  //  DEBUG_PRINTLN(brtPot);
   return brtPot;
 }
 
@@ -148,10 +147,10 @@ void updateBrightness() {
   int reading = getBrightnessPot();
   float brt = (float)reading / (float)(BRIGHTNESS_POT_READING_MAX - BRIGHTNESS_POT_READING_MIN);
 
-//  DEBUG_PRINT("brt: ");
-//  DEBUG_PRINTLN(brt);
+  //  DEBUG_PRINT("brt: ");
+  //  DEBUG_PRINTLN(brt);
 
-  uint8_t brightness = floor((float)WHITE_LEVEL_MAX * brt);
+  uint8_t brightness = floor((float)MAX_LED_BRIGTHNESS * brt);
 
   brightnessReadings[brightnessReadingsIndex] = brightness;
   brightnessReadingsIndex++;
@@ -166,15 +165,15 @@ void updateBrightness() {
 
   currentBrightnessLevel = brightnessAvg; //floor((float)WHITE_LEVEL_MAX * brt);
 
-//  DEBUG_PRINT("currentBrightnessLevel: ");
-//  DEBUG_PRINTLN(currentBrightnessLevel);
+  //  DEBUG_PRINT("currentBrightnessLevel: ");
+  //  DEBUG_PRINTLN(currentBrightnessLevel);
 
 }
 
 // takes old brightness, converts to dimmed brightness
 uint8_t colourBrightness(uint8_t inputBrightness)
 {
-  return floor(( (float)( (float) currentBrightnessLevel / (float)WHITE_LEVEL_MAX) * (float)inputBrightness));
+  return floor(( (float)( (float) currentBrightnessLevel / (float)MAX_LED_BRIGTHNESS) * (float)inputBrightness));
 }
 
 void modeService()
@@ -235,44 +234,57 @@ void knightRiderService()
 {
   setAllPixelsOff(false);
 
-  // max value of pixelModeCycleIndex is 256  
-    
-    uint16_t i = pixelModeCycleIndex;
-    
-    //DEBUG_PRINTLN(i);
+  int dir;
+  int pxIndex = pixelModeCycleIndex * 2;
+  if(pxIndex >= 255)
+  {
+    pxIndex -= 255;
+  }
 
-    int pixelCenterPos = (float)(sin(i/8)+1) * ((float)PIXEL_COUNT/2);
-//    DEBUG_PRINTLN(sin(i));
-    DEBUG_PRINTLN(pixelCenterPos);
-    
-    strip.setPixelColor(pixelCenterPos, colourBrightness(255),0,0);
-    strip.show();
-    
-    return;
-    
-    for(int fadeIndex = 0; fadeIndex <= PIXEL_COUNT/6; fadeIndex ++)
-    {
-      int pixelNum = 0;
-      
-      
-      pixelNum = fadeIndex + pixelCenterPos;
-      
-//      DEBUG_PRINTLN(pixelNum);
-      
-      continue;
-      
-      if((pixelNum >= 0) || (pixelNum < PIXEL_COUNT))
-      {
-        int pixelBrightness = 255 * cos((float) (PIXEL_COUNT/6) * 90) * (float)fadeIndex;
-        
-//        DEBUG_PRINTLN(pixelBrightness);
-        
-        strip.setPixelColor(pixelNum, colourBrightness(pixelBrightness),0,0);
-      }
-    }
+  if ((pxIndex >= 0) && (pxIndex <= 127))
+  {
+    // right
+    dir = 1;
+  } else {
+    // left
+    dir = 2;
+  }
+
+  float pxCenter;
+
+  switch (dir)
+  {
+    case 1:
+      // right
+      pxCenter = ((float)((float) pxIndex / 128) * (float) PIXEL_COUNT);
+      DEBUG_PRINTLN(pxCenter);
+      break;
+    case 2:
+      // left
+      pxCenter = ((float)((float) (128 - (pxIndex - 128)) / 128) * (float) PIXEL_COUNT);
+      DEBUG_PRINTLN(pxCenter);
+      break;
+  }
+
+  // width of faded surround section
+  int fadeWidth = 15;
+  float gradient = (float)255 / ((float)fadeWidth / 2);
   
+  for(int i = fadeWidth / 2; i >= 1 ; i--)
+  {
+    int px = pxCenter - i;
+    strip.setPixelColor(px, colourBrightness(gradient * ((fadeWidth / 2) - i)), 0 , 0);
+  }
+  
+  for(int i = 1; i <= fadeWidth / 2; i++)
+  {
+    int px = pxCenter + i;
+    strip.setPixelColor(px, colourBrightness(gradient * ((fadeWidth / 2) - i)), 0 , 0);
+  }
+
+  strip.setPixelColor(pxCenter, colourBrightness(255), 0 , 0);
+
   strip.show();
-  
 }
 
 void colourFlowFromEndService()
@@ -298,7 +310,7 @@ void hourGlassDropOutService()
   setAllPixelsOff(false);
   for (uint16_t i = 0; i < strip.numPixels() - (pixelModeCycleIndex >> 5); i++)
   {
-    strip.setPixelColor(i, colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX));
+    strip.setPixelColor(i, colourBrightness(MAX_LED_BRIGTHNESS), colourBrightness(MAX_LED_BRIGTHNESS), colourBrightness(MAX_LED_BRIGTHNESS));
   }
   strip.show();
 }
@@ -309,7 +321,7 @@ void holdWhiteService()
 {
   for (uint16_t i = 0; i < strip.numPixels(); i++)
   {
-    strip.setPixelColor(i, colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX), colourBrightness(WHITE_LEVEL_MAX));
+    strip.setPixelColor(i, colourBrightness(MAX_LED_BRIGTHNESS), colourBrightness(MAX_LED_BRIGTHNESS), colourBrightness(MAX_LED_BRIGTHNESS));
   }
   strip.show();
 }
@@ -383,25 +395,25 @@ void rainbowCycleService2() {
 // The colours are a transition r - g - b - back to r.
 uint32_t Wheel(byte WheelPos) {
   if (WheelPos < 85) {
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    return strip.Color(colourBrightness(WheelPos * 3), colourBrightness(255 - WheelPos * 3), 0);
   } else if (WheelPos < 170) {
     WheelPos -= 85;
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+    return strip.Color(colourBrightness(255 - WheelPos * 3), 0, colourBrightness(WheelPos * 3));
   } else {
     WheelPos -= 170;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+    return strip.Color(0, colourBrightness(WheelPos * 3), colourBrightness(255 - WheelPos * 3));
   }
 }
 
 uint32_t Wheel2(byte WheelPos) {
   WheelPos = 255 - WheelPos;
   if (WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+    return strip.Color(colourBrightness(255 - WheelPos * 3), 0, colourBrightness(WheelPos * 3));
   } else if (WheelPos < 170) {
     WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+    return strip.Color(0, colourBrightness(WheelPos * 3), colourBrightness(255 - WheelPos * 3));
   } else {
     WheelPos -= 170;
-    return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+    return strip.Color(colourBrightness(WheelPos * 3), colourBrightness(255 - WheelPos * 3), 0);
   }
 }
